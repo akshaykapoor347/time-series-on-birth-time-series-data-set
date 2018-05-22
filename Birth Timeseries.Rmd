@@ -1,0 +1,149 @@
+---
+title: "BirthTimeSeries"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Part A decomposition
+```{r}
+library(forecast)
+births <- scan("http://robjhyndman.com/tsdldata/data/nybirths.dat")
+birthstimeseries <- ts(births, frequency=12, start=c(1946,1))
+birthstimeseries
+
+```
+
+**ts** is a timeseries function that will convert data to time series. <br>
+Frequency 12 means data will be represented on a monthly basis and start defines the starting date (in this case from january 1946)
+
+```{r }
+plot(birthstimeseries)
+```
+<br>
+Ploting values on Y axis.Time is represented on X axis.
+
+```{r}
+birthstimeseriescomponents <- decompose(birthstimeseries)
+```
+To estimate the trend, seasonal and irregular components of this time series. <br> The estimated values of the seasonal, trend and irregular components are now stored in variables.
+```{r}
+birthstimeseriescomponents$seasonal 
+```
+get the estimated values of the seasonal component
+```{r }
+birthstimeseriescomponents$trend 
+```
+get the estimated values of the trend component
+
+```{r}
+plot(birthstimeseriescomponents)
+```
+
+First graph is between Observed value and Time <br>
+Second graph is between Trend and Time.Trend defines the kind of trend the value is forming over a time period <br>
+Third graph is between Seasonal and time.Seasonal componenet<br>
+Fourth graph is irregular component
+
+```{r }
+birthstimeseriesseasonallyadjusted <- birthstimeseries - birthstimeseriescomponents$seasonal
+plot(birthstimeseriesseasonallyadjusted)
+
+```
+Seasonal time series that can be described using an additive model
+<br> Seasonal variation has been removed from the seasonally adjusted time series. <br>
+The seasonally adjusted time series now just contains the trend component and an irregular component.
+
+#Part B Using Arima 
+```{r }
+volcanodust <- scan("http://robjhyndman.com/tsdldata/annual/dvi.dat", skip=1)
+
+volcanodustseries <- ts(volcanodust,start=c(1500))
+class(volcanodustseries)
+
+plot.ts(volcanodustseries)
+```
+
+From the time plot, it appears that the random fluctuations in the time series are roughly constant in size over time, so an additive model is probably appropriate for describing this time series.
+
+```{r }
+acf(volcanodustseries, lag.max=20)             
+acf(volcanodustseries, lag.max=20, plot=FALSE) 
+```
+
+Autocorrelations for lags 1, 2 and 3 exceed the significance bounds, and that the autocorrelations tail off to zero after lag 3.  
+The autocorrelations for lags 1, 2, 3 are positive, and decrease in magnitude with increasing lag. 
+```{r }
+pacf(volcanodustseries, lag.max=20)
+pacf(volcanodustseries, lag.max=20, plot=FALSE)
+```
+
+Partial autocorrelation at lag 1 is positive and exceeds the significance bounds (0.666), while the partial autocorrelation at lag 2 is negative and also exceeds the significance bounds (-0.126). <br>
+The partial autocorrelations tail off to zero after lag 2.
+```{r }
+volcanodustseriesarima <- arima(volcanodustseries, order=c(2,0,0))
+volcanodustseriesarima
+```
+ARIMA model for the time series of volcanic dust veil index may be an ARIMA(2,0,0) model. 
+To fit an ARIMA(2,0,0) model to this time series
+
+```{r }
+volcanodustseriesforecasts <- forecast(volcanodustseriesarima, h=31)
+volcanodustseriesforecasts
+```
+forecast() model to predict future values of the volcanic dust veil index. <br> 
+The original data includes the years 1500-1969. <br>
+To make predictions for the years 1970-2000 (31 more years)
+
+```{r }
+plot(forecast(volcanodustseriesforecasts))
+```
+<br>
+The model has predicted negative values for the volcanic dust veil index, but this variable can only have positive values
+
+```{r }
+acf(volcanodustseriesforecasts$residuals, lag.max=20)
+Box.test(volcanodustseriesforecasts$residuals, lag=20, type="Ljung-Box")
+```
+Correlogram shows that the sample autocorrelation at lag 20 exceeds the significance bounds. 
+
+```{r, echo=FALSE }
+plotForecastErrors <- function(forecasterrors)
+{
+  # make a histogram of the forecast errors:
+  mybinsize <- IQR(forecasterrors)/4
+  mysd <- sd(forecasterrors)
+  mymin <- min(forecasterrors) - mysd*5
+  mymax <- max(forecasterrors) + mysd*3
+  # generate normally distributed data with mean 0 and standard deviation mysd
+  mynorm <- rnorm(10000, mean=0, sd=mysd)
+  mymin2 <- min(mynorm)
+  mymax2 <- max(mynorm)
+  if (mymin2 < mymin) { mymin <- mymin2 }
+  if (mymax2 > mymax) { mymax <- mymax2 }
+  # make a red histogram of the forecast errors, with the normally distributed data overlaid:
+    mybins <- seq(mymin, mymax, mybinsize)
+  hist(forecasterrors, col="red", freq=FALSE, breaks=mybins)
+  # freq=FALSE ensures the area under the histogram = 1
+  # generate normally distributed data with mean 0 and standard deviation mysd
+  myhist <- hist(mynorm, plot=FALSE, breaks=mybins)
+  # plot the normal curve as a blue line on top of the histogram of forecast?????errors:
+    points(myhist$mids, myhist$density, type="l", col="blue", lwd=2)
+}
+
+```
+
+```{r }
+plotForecastErrors(volcanodustseriesforecasts$residuals)
+```
+
+```{r }
+mean(volcanodustseriesforecasts$residuals)
+```
+
+
+Time plot of forecast errors shows that the forecast errors seem to have roughly constant variance over time. However, the time series of forecast errors seems to have a negative mean, rather than a zero mean. We can confirm this by calculating the mean forecast error, which turns out to be about -0.22:
+
+
